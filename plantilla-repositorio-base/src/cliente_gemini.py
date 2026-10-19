@@ -35,7 +35,6 @@ def enviar_peticion(cliente, pregunta, modelo=None):
     try:
         return cliente.models.generate_content(model=modelo, contents=pregunta)
     except errors.ClientError as e:
-        # 4xx: credencial inválida, modelo inexistente, cuota agotada, etc.
         raise RuntimeError(
             f"El servicio rechazó la petición (código {e.code}): {e.message}. "
             "Revisa tu API key y el nombre del modelo."
@@ -61,11 +60,18 @@ def extraer_texto(respuesta):
     return texto
 
 
-def obtener_dato_de_prueba(pregunta):
-    pregunta = validar_pregunta(pregunta)
-    cliente = crear_cliente()
-    respuesta = enviar_peticion(cliente, pregunta)
-    return extraer_texto(respuesta)
+def calcular_costo_entero(respuesta, precio_entrada_millones, precio_salida_millones):
+    """Calcula el costo total devolviendo un valor entero (en unidades escaladas)."""
+    uso = getattr(respuesta, "usage_metadata", None)
+    if not uso:
+        return 0
+    
+    tokens_prompt = getattr(uso, "prompt_token_count", 0)
+    tokens_respuesta = getattr(uso, "candidates_token_count", 0)
+    
+    # Realiza el cálculo multiplicando correctamente tokens por sus tarifas escaladas
+    costo_total = (tokens_prompt * precio_entrada_millones) + (tokens_respuesta * precio_salida_millones)
+    return int(costo_total)
 
 
 if __name__ == "__main__":
@@ -74,6 +80,22 @@ if __name__ == "__main__":
         "bien configurado."
     )
     try:
-        print(obtener_dato_de_prueba(pregunta))
+        cliente = crear_cliente()
+        pregunta_validada = validar_pregunta(pregunta)
+        
+        # Obtenemos la respuesta cruda para poder evaluar tanto el texto como los metadatos
+        respuesta = enviar_peticion(cliente, pregunta_validada)
+        
+        # Mostramos la respuesta generada
+        print("Respuesta del modelo:")
+        print(extraer_texto(respuesta))
+        
+        # Calculamos el costo entero utilizando factores de escala
+        PRECIO_ENTRADA_ESCALADO = 150
+        PRECIO_SALIDA_ESCALADO = 600
+        
+        costo_entero = calcular_costo_entero(respuesta, PRECIO_ENTRADA_ESCALADO, PRECIO_SALIDA_ESCALADO)
+        print(f"\n[Costo interno calculado (valor entero): {costo_entero}]")
+        
     except (ValueError, RuntimeError) as error:
         print("No se pudo completar la operación:", error)
