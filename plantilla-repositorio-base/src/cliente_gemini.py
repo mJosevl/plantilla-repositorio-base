@@ -10,6 +10,13 @@ load_dotenv()
 
 MODELO_POR_DEFECTO = "gemini-3.8-flash"
 
+# Tarifa FICTICIA, solo para el ejercicio.
+# Unidad: nanodólares por token (precio por millón × 1.000).
+# US$1 por millón de entrada = 1000; US$4 por millón de salida = 4000.
+PRECIO_ENTRADA_ESCALADO = 1000
+PRECIO_SALIDA_ESCALADO = 4000
+NANODOLARES_POR_DOLAR = 1_000_000_000
+
 
 def crear_cliente():
     """Crea el cliente de Gemini validando que exista la credencial."""
@@ -60,18 +67,28 @@ def extraer_texto(respuesta):
     return texto
 
 
-def calcular_costo_entero(respuesta, precio_entrada_millones, precio_salida_millones):
-    """Calcula el costo total devolviendo un valor entero (en unidades escaladas)."""
+def calcular_costo(respuesta, precio_entrada, precio_salida):
+    """Devuelve tokens y costo (en nanodólares enteros) a partir de usage_metadata."""
     uso = getattr(respuesta, "usage_metadata", None)
     if not uso:
-        return 0
-    
-    tokens_prompt = getattr(uso, "prompt_token_count", 0)
-    tokens_respuesta = getattr(uso, "candidates_token_count", 0)
-    
-    # Realiza el cálculo multiplicando correctamente tokens por sus tarifas escaladas
-    costo_total = (tokens_prompt * precio_entrada_millones) + (tokens_respuesta * precio_salida_millones)
-    return int(costo_total)
+        raise RuntimeError(
+            "La respuesta no trae usage_metadata, no se puede calcular el costo."
+        )
+
+    # "or 0" cubre tanto el atributo ausente como el valor None
+    tokens_entrada = getattr(uso, "prompt_token_count", None) or 0
+    tokens_respuesta = getattr(uso, "candidates_token_count", None) or 0
+    tokens_razonamiento = getattr(uso, "thoughts_token_count", None) or 0
+
+    # Los tokens de razonamiento se cobran como salida
+    tokens_salida = tokens_respuesta + tokens_razonamiento
+
+    costo = tokens_entrada * precio_entrada + tokens_salida * precio_salida
+    return {
+        "tokens_entrada": tokens_entrada,
+        "tokens_salida": tokens_salida,
+        "costo_nanodolares": costo,
+    }
 
 
 if __name__ == "__main__":
@@ -82,20 +99,19 @@ if __name__ == "__main__":
     try:
         cliente = crear_cliente()
         pregunta_validada = validar_pregunta(pregunta)
-        
-        # Obtenemos la respuesta cruda para poder evaluar tanto el texto como los metadatos
         respuesta = enviar_peticion(cliente, pregunta_validada)
-        
-        # Mostramos la respuesta generada
+
         print("Respuesta del modelo:")
         print(extraer_texto(respuesta))
-        
-        # Calculamos el costo entero utilizando factores de escala
-        PRECIO_ENTRADA_ESCALADO = 150
-        PRECIO_SALIDA_ESCALADO = 600
-        
-        costo_entero = calcular_costo_entero(respuesta, PRECIO_ENTRADA_ESCALADO, PRECIO_SALIDA_ESCALADO)
-        print(f"\n[Costo interno calculado (valor entero): {costo_entero}]")
-        
+
+        uso = calcular_costo(
+            respuesta, PRECIO_ENTRADA_ESCALADO, PRECIO_SALIDA_ESCALADO
+        )
+        costo_usd = uso["costo_nanodolares"] / NANODOLARES_POR_DOLAR
+
+        print(f"\nTokens de entrada: {uso['tokens_entrada']}")
+        print(f"Tokens de salida: {uso['tokens_salida']}")
+        print(f"Costo estimado (tarifa ficticia): US$ {costo_usd:.6f}")
+
     except (ValueError, RuntimeError) as error:
         print("No se pudo completar la operación:", error)
