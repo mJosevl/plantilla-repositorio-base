@@ -1,4 +1,5 @@
 import os
+import time
 
 import httpx
 from dotenv import load_dotenv
@@ -9,6 +10,10 @@ from google.genai import errors
 load_dotenv()
 
 MODELO_POR_DEFECTO = "gemini-3.8-flash"
+
+# Modelos que se comparan en latencia (verifica que existan en tu cuenta).
+MODELOS_A_COMPARAR = ["gemini-3.5-flash-lite", "gemini-3.5-flash"]
+CICLOS_POR_MODELO = 5
 
 # Tarifa FICTICIA, solo para el ejercicio.
 # Unidad: nanodólares por token (precio por millón × 1.000).
@@ -91,6 +96,27 @@ def calcular_costo(respuesta, precio_entrada, precio_salida):
     }
 
 
+def medir_latencia(cliente, pregunta, modelo, ciclos=CICLOS_POR_MODELO):
+    """Mide cuánto tarda enviar_peticion, repetida varias veces, y resume los tiempos."""
+    if ciclos < 1:
+        raise ValueError("Los ciclos deben ser al menos 1")
+
+    tiempos = []
+    for _ in range(ciclos):
+        inicio = time.perf_counter()
+        enviar_peticion(cliente, pregunta, modelo)
+        fin = time.perf_counter()
+        tiempos.append(fin - inicio)
+
+    return {
+        "modelo": modelo,
+        "ciclos": ciclos,
+        "promedio": sum(tiempos) / len(tiempos),
+        "minimo": min(tiempos),
+        "maximo": max(tiempos),
+    }
+
+
 if __name__ == "__main__":
     pregunta = (
         "Hola, confirma con un mensaje corto que mi entorno Python está "
@@ -112,6 +138,20 @@ if __name__ == "__main__":
         print(f"\nTokens de entrada: {uso['tokens_entrada']}")
         print(f"Tokens de salida: {uso['tokens_salida']}")
         print(f"Costo estimado (tarifa ficticia): US$ {costo_usd:.6f}")
+
+        # Comparación de latencia: misma pregunta corta para todos los modelos
+        pregunta_latencia = validar_pregunta(
+            "Cuánto es 2 + 2? Dame solo el resultado"
+        )
+        print(f"\nLatencia ({CICLOS_POR_MODELO} ciclos por modelo):")
+        for modelo in MODELOS_A_COMPARAR:
+            resultado = medir_latencia(cliente, pregunta_latencia, modelo)
+            print(
+                f"{resultado['modelo']}: "
+                f"promedio {resultado['promedio']:.2f} s | "
+                f"mínimo {resultado['minimo']:.2f} s | "
+                f"máximo {resultado['maximo']:.2f} s"
+            )
 
     except (ValueError, RuntimeError) as error:
         print("No se pudo completar la operación:", error)
