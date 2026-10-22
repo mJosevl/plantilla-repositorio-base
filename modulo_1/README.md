@@ -39,18 +39,5 @@ Manejo de errores: El cliente y el test están preparados para distinguir entre 
 
 Consistencia: Las 3 pruebas del banco (capital_pais, es_par, colores_primarios) han demostrado un 100% de consistencia en formato y contenido en la última ejecución.
 
-text
 
-### Último paso para guardar esto en Git
-Como modificaste el `README.md`, debes agregarlo al commit. Si ya hiciste el commit de los otros archivos, solo escribe:
-
-```powershell
-git add README.md
-git commit -m "docs: actualiza README con la estructura y estado actual del proyecto"
-Si aún no has hecho el commit de los archivos de código, puedes agregar todo junto:
-
-powershell
-git add README.md src/banco.py src/test_consistencia.py src/registro_resultados.json src/cliente_gemini.py src/decision-arquitectura.md
-git commit -m "feat: completa banco de prompts, test de consistencia y actualiza README"
-¡Con esto tu repositorio no solo tendrá el código funcionando, sino que lucirá profesional y listo para que cualquier persona (o tu profesor) lo entienda a la primera! 🎓✨
 
