@@ -19,4 +19,6 @@ Thumbs.db
 
 # Logs
 *.log
+
 postman/
+**/registro_resultados.json
