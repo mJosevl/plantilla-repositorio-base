@@ -12,7 +12,7 @@ from google.genai import errors, types
 # Carga las variables definidas en el archivo .env
 load_dotenv()
 
-MODELO_POR_DEFECTO = "gemini-3.6-flash"
+MODELO_POR_DEFECTO = "gemini-3.5-flash-lite"
 
 # Precios oficiales, nivel de pago, Standard.
 # Unidad: nanodólares por token (USD por millón de tokens × 1.000).
