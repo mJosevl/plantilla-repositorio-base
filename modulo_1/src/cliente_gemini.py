@@ -1,25 +1,33 @@
+import json
 import os
+import re
+import statistics
 import time
 
 import httpx
 from dotenv import load_dotenv
 from google import genai
-from google.genai import errors
+from google.genai import errors, types
 
 # Carga las variables definidas en el archivo .env
 load_dotenv()
 
-MODELO_POR_DEFECTO = "gemini-3.8-flash"
+MODELO_POR_DEFECTO = "gemini-3.6-flash"
 
-# Modelos que se comparan en latencia (verifica que existan en tu cuenta).
-MODELOS_A_COMPARAR = ["gemini-3.5-flash-lite", "gemini-3.5-flash"]
+# Precios oficiales, nivel de pago, Standard.
+# Unidad: nanodólares por token (USD por millón de tokens × 1.000).
+# Fuente: https://ai.google.dev/gemini-api/docs/pricing (consultado el 2026-10-20).
+# El precio de salida incluye los tokens de razonamiento.
+# gemini-3.8-flash y gemini-3.6-flash: precio vigente hasta el 2026-12-31;
+# desde el 2027-01-01 suben a (1500, 7500).
+PRECIOS = {
+    "gemini-3.8-flash": (750, 3750),
+    "gemini-3.6-flash": (750, 3750),
+    "gemini-3.5-flash-lite": (300, 2500),
+    "gemini-3.1-flash-lite": (250, 1500),
+}
+MODELOS_A_COMPARAR = list(PRECIOS)
 CICLOS_POR_MODELO = 5
-
-# Tarifa FICTICIA, solo para el ejercicio.
-# Unidad: nanodólares por token (precio por millón × 1.000).
-# US$1 por millón de entrada = 1000; US$4 por millón de salida = 4000.
-PRECIO_ENTRADA_ESCALADO = 1000
-PRECIO_SALIDA_ESCALADO = 4000
 NANODOLARES_POR_DOLAR = 1_000_000_000
 
 
@@ -35,17 +43,37 @@ def crear_cliente():
 
 
 def validar_pregunta(pregunta):
-    """Detiene la ejecución si la pregunta viene vacía."""
-    if not pregunta or not pregunta.strip():
+    """Detiene la ejecución si la pregunta no es texto o viene vacía."""
+    if not isinstance(pregunta, str):
+        raise ValueError("La pregunta debe ser una cadena de texto")
+    if not pregunta.strip():
         raise ValueError("La pregunta no puede estar vacía")
     return pregunta.strip()
 
 
-def enviar_peticion(cliente, pregunta, modelo=None):
-    """Envía la pregunta al modelo y devuelve la respuesta cruda del SDK."""
+def enviar_peticion(cliente, pregunta, modelo=None,
+                    system_instruction=None, response_schema=None):
+    """Envía la pregunta al modelo y devuelve la respuesta cruda del SDK.
+
+    system_instruction: instrucción de comportamiento, separada de la pregunta.
+    response_schema: forma exacta que debe tener el JSON de la respuesta.
+    Los dos son opcionales: si no se pasan, funciona como antes.
+    """
     modelo = modelo or os.getenv("GEMINI_MODEL", MODELO_POR_DEFECTO)
+
+    # Armamos las opciones solo con lo que nos pasaron
+    opciones = {}
+    if system_instruction:
+        opciones["system_instruction"] = system_instruction
+    if response_schema:
+        opciones["response_mime_type"] = "application/json"
+        opciones["response_schema"] = response_schema
+    config = types.GenerateContentConfig(**opciones)
+
     try:
-        return cliente.models.generate_content(model=modelo, contents=pregunta)
+        return cliente.models.generate_content(
+            model=modelo, contents=pregunta, config=config
+        )
     except errors.ClientError as e:
         raise RuntimeError(
             f"El servicio rechazó la petición (código {e.code}): {e.message}. "
@@ -70,6 +98,41 @@ def extraer_texto(respuesta):
             "La respuesta no trae el texto generado en el lugar esperado."
         )
     return texto
+
+
+def parsear_respuesta_json(texto, claves_esperadas):
+    """Convierte el texto del modelo en un diccionario y revisa sus claves."""
+    # 1. Limpiar: quitar espacios y las marcas ```json ... ``` si el modelo las puso
+    limpio = texto.strip()
+    limpio = re.sub(r"^```(?:json)?\s*", "", limpio)  # borra ```json del inicio
+    limpio = re.sub(r"\s*```$", "", limpio)           # borra ``` del final
+
+    # 2. Convertir el texto en un diccionario de Python
+    try:
+        datos = json.loads(limpio)
+    except json.JSONDecodeError as e:
+        raise ValueError("La respuesta del modelo no es JSON válido.") from e
+
+    # 3. Revisar que sea un diccionario y que traiga todas las claves
+    if not isinstance(datos, dict):
+        raise ValueError("La respuesta JSON no es un objeto.")
+    for clave in claves_esperadas:
+        if clave not in datos:
+            raise ValueError(f"Falta la clave '{clave}' en la respuesta.")
+
+    # 4. Todo bien
+    return datos
+
+
+def obtener_precios(modelo):
+    """Devuelve (precio_entrada, precio_salida) del modelo, o falla con un mensaje claro."""
+    precios = PRECIOS.get(modelo)
+    if precios is None:
+        raise RuntimeError(
+            f"No hay precios cargados para el modelo '{modelo}'. "
+            "Agrégalo al diccionario PRECIOS."
+        )
+    return precios
 
 
 def calcular_costo(respuesta, precio_entrada, precio_salida):
@@ -102,21 +165,45 @@ def medir_latencia(cliente, pregunta, modelo, ciclos=CICLOS_POR_MODELO):
         raise ValueError("Los ciclos deben ser al menos 1")
 
     tiempos = []
+    respuesta = None
     for _ in range(ciclos):
         inicio = time.perf_counter()
-        enviar_peticion(cliente, pregunta, modelo)
+        respuesta = enviar_peticion(cliente, pregunta, modelo)
         fin = time.perf_counter()
         tiempos.append(fin - inicio)
 
     return {
         "modelo": modelo,
         "ciclos": ciclos,
+        "tiempos": tiempos,
         "promedio": sum(tiempos) / len(tiempos),
+        "mediana": statistics.median(tiempos),
         "minimo": min(tiempos),
         "maximo": max(tiempos),
+        # Se conserva la última respuesta para calcular tokens y costo
+        "ultima_respuesta": respuesta,
     }
-
-
+#obtener_dato_de_prueba
+def obtener_dato_de_prueba(pregunta, system_instruction=None, response_schema=None):
+    """Valida, envía, extrae y, si hay esquema, convierte la respuesta en diccionario.
+    Devuelve el resultado, o None si algo falla."""
+    try:
+        pregunta = validar_pregunta(pregunta)
+        cliente = crear_cliente()
+        respuesta = enviar_peticion(
+            cliente, pregunta,
+            system_instruction=system_instruction,
+            response_schema=response_schema,
+        )
+        texto = extraer_texto(respuesta)
+        if response_schema:
+            # Las claves esperadas son las que el esquema marca como "required"
+            return parsear_respuesta_json(texto, response_schema.get("required", []))
+        return texto
+    except (ValueError, RuntimeError) as error:
+        print("No se pudo completar la operación:", error)
+        return None
+    
 if __name__ == "__main__":
     pregunta = (
         "Hola, confirma con un mensaje corto que mi entorno Python está "
@@ -125,32 +212,49 @@ if __name__ == "__main__":
     try:
         cliente = crear_cliente()
         pregunta_validada = validar_pregunta(pregunta)
-        respuesta = enviar_peticion(cliente, pregunta_validada)
+
+        # Petición principal, con el modelo explícito para buscar su precio
+        modelo_principal = os.getenv("GEMINI_MODEL", MODELO_POR_DEFECTO)
+        respuesta = enviar_peticion(cliente, pregunta_validada, modelo_principal)
 
         print("Respuesta del modelo:")
         print(extraer_texto(respuesta))
 
-        uso = calcular_costo(
-            respuesta, PRECIO_ENTRADA_ESCALADO, PRECIO_SALIDA_ESCALADO
-        )
+        precio_entrada, precio_salida = obtener_precios(modelo_principal)
+        uso = calcular_costo(respuesta, precio_entrada, precio_salida)
         costo_usd = uso["costo_nanodolares"] / NANODOLARES_POR_DOLAR
 
-        print(f"\nTokens de entrada: {uso['tokens_entrada']}")
+        print(f"\nModelo: {modelo_principal}")
+        print(f"Tokens de entrada: {uso['tokens_entrada']}")
         print(f"Tokens de salida: {uso['tokens_salida']}")
-        print(f"Costo estimado (tarifa ficticia): US$ {costo_usd:.6f}")
+        print(f"Costo estimado (precio oficial): US$ {costo_usd:.6f}")
 
-        # Comparación de latencia: misma pregunta corta para todos los modelos
+        # Comparación: misma pregunta corta para todos los modelos
         pregunta_latencia = validar_pregunta(
             "Cuánto es 2 + 2? Dame solo el resultado"
         )
-        print(f"\nLatencia ({CICLOS_POR_MODELO} ciclos por modelo):")
+        print(f"\nComparación ({CICLOS_POR_MODELO} ciclos por modelo):")
         for modelo in MODELOS_A_COMPARAR:
-            resultado = medir_latencia(cliente, pregunta_latencia, modelo)
+            # Si un modelo falla, se omite y se sigue con el siguiente
+            try:
+                resultado = medir_latencia(cliente, pregunta_latencia, modelo)
+                p_entrada, p_salida = obtener_precios(modelo)
+                uso_modelo = calcular_costo(
+                    resultado["ultima_respuesta"], p_entrada, p_salida
+                )
+            except RuntimeError as error:
+                print(f"{modelo}: se omite ({error})")
+                continue
+
+            costo_modelo = uso_modelo["costo_nanodolares"] / NANODOLARES_POR_DOLAR
             print(
-                f"{resultado['modelo']}: "
-                f"promedio {resultado['promedio']:.2f} s | "
-                f"mínimo {resultado['minimo']:.2f} s | "
-                f"máximo {resultado['maximo']:.2f} s"
+                f"{modelo}: "
+                f"prom {resultado['promedio']:.2f} s | "
+                f"mediana {resultado['mediana']:.2f} s | "
+                f"mín {resultado['minimo']:.2f} s | "
+                f"máx {resultado['maximo']:.2f} s | "
+                f"tokens {uso_modelo['tokens_entrada']}/{uso_modelo['tokens_salida']} | "
+                f"costo US$ {costo_modelo:.6f}"
             )
 
     except (ValueError, RuntimeError) as error:
