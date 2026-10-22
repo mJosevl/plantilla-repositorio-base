@@ -1,0 +1,119 @@
+{
+  "modelo": "gemini-3.5-flash-lite",
+  "resultados": [
+    {
+      "nombre": "capital_pais",
+      "ciclos": 3,
+      "exitos": 3,
+      "fallos_prompt": 0,
+      "fallos_infra": 0,
+      "consistente": true,
+      "detalles": [
+        {
+          "ciclo": 1,
+          "tipo": "ok",
+          "datos": {
+            "rta": "Tokio",
+            "contexto": "Tokio es la capital y el centro político y económico de Japón."
+          }
+        },
+        {
+          "ciclo": 2,
+          "tipo": "ok",
+          "datos": {
+            "rta": "Tokio",
+            "contexto": "Tokio es la capital y el centro político y económico de Japón."
+          }
+        },
+        {
+          "ciclo": 3,
+          "tipo": "ok",
+          "datos": {
+            "rta": "Tokio",
+            "contexto": "Tokio es la capital y el centro político y económico de Japón."
+          }
+        }
+      ]
+    },
+    {
+      "nombre": "es_par",
+      "ciclos": 3,
+      "exitos": 3,
+      "fallos_prompt": 0,
+      "fallos_infra": 0,
+      "consistente": true,
+      "detalles": [
+        {
+          "ciclo": 1,
+          "tipo": "ok",
+          "datos": {
+            "respuesta": "no",
+            "motivo": "El 7 no es divisible por dos."
+          }
+        },
+        {
+          "ciclo": 2,
+          "tipo": "ok",
+          "datos": {
+            "respuesta": "no",
+            "motivo": "El número 7 es impar."
+          }
+        },
+        {
+          "ciclo": 3,
+          "tipo": "ok",
+          "datos": {
+            "respuesta": "no",
+            "motivo": "El número 7 es impar."
+          }
+        }
+      ]
+    },
+    {
+      "nombre": "colores_primarios",
+      "ciclos": 3,
+      "exitos": 3,
+      "fallos_prompt": 0,
+      "fallos_infra": 0,
+      "consistente": true,
+      "detalles": [
+        {
+          "ciclo": 1,
+          "tipo": "ok",
+          "datos": {
+            "items": [
+              "rojo",
+              "amarillo",
+              "azul"
+            ],
+            "criterio": "Son considerados colores primarios tradicionales porque no se pueden obtener mediante la mezcla de otros colores."
+          }
+        },
+        {
+          "ciclo": 2,
+          "tipo": "ok",
+          "datos": {
+            "items": [
+              "rojo",
+              "azul",
+              "amarillo"
+            ],
+            "criterio": "Son los colores base que no se pueden obtener mediante la mezcla de otros colores en el modelo tradicional."
+          }
+        },
+        {
+          "ciclo": 3,
+          "tipo": "ok",
+          "datos": {
+            "items": [
+              "rojo",
+              "azul",
+              "amarillo"
+            ],
+            "criterio": "Son los colores base que no se pueden obtener mediante la mezcla de otros colores."
+          }
+        }
+      ]
+    }
+  ]
+}
