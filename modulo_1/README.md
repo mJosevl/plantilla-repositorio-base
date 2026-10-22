@@ -1,27 +1,56 @@
-# Plantilla de repositorio base — Especialización en Desarrollo con IA Generativa (Accenture)
+# Proyecto: Miniaplicación con Gemini (Módulo 1)
 
-Esta es la estructura base que vas a usar como punto de partida para tu proyecto en este programa. Es la misma estructura que vas a ir ampliando bloque a bloque, hasta llegar a la aplicación completa que entregas en el Gate 3.
+Este repositorio contiene el avance del proyecto para el programa de Especialización en Desarrollo con IA Generativa (Accenture). Actualmente incluye un módulo de conexión a la API de Google Gemini, análisis de rendimiento y un banco de pruebas para validar la consistencia de los prompts.
 
-## Cómo empezar
+## Estructura del proyecto
 
-Estos pasos se completan de forma progresiva a lo largo de la Unidad U1.2, no todos el mismo día:
+- `modulo_1/src/` : Código fuente del módulo 1.
+  - `cliente_gemini.py` : Motor de conexión a la API. Incluye validación de respuestas JSON, manejo de errores (429/503) y cálculo de costos por tokens.
+  - `banco.py` : Banco de 3 prompts de prueba con sus esquemas de validación (`response_schema`).
+  - `test_consistencia.py` : Script evaluador que ejecuta los prompts del banco 3 veces cada uno y genera evidencia en JSON.
+  - `registro_resultados.json` : Evidencia de la última ejecución exitosa (9/9 pruebas superadas).
+- `modulo_1/docs/` : Documentación técnica.
+  - `decision-arquitectura.md` : Justificación de la elección del modelo (`gemini-3.6-flash`) basada en pruebas de latencia y costo.
+- `modulo_1/requirements.txt` : Dependencias del proyecto.
+- `.env.example` : Plantilla de variables de entorno (la API Key real va en `.env`, el cual no se sube al repositorio).
 
-1. Descarga este archivo comprimido (adjunto en la plataforma) y descomprímelo en tu computador. Inicializa el control de versiones sobre esa carpeta y registra tu primer commit con esta estructura base, tal como llegó, antes de modificar nada.
-2. Crea tu entorno virtual de Python (por ejemplo, con `venv`) y actívalo.
-3. Instala las dependencias que necesites y regístralas en `requirements.txt` (al inicio puede estar vacío o con muy pocas).
-4. Copia `.env.example` a un archivo nuevo llamado `.env`, y completa ahí tus credenciales reales (llaves de API, tokens). El archivo `.env` nunca se sube al repositorio: ya está excluido en `.gitignore`.
+## ¿Cómo ejecutar el proyecto?
 
-## Estructura de carpetas
+1. Asegúrate de tener tu entorno virtual activado y las dependencias instaladas:
+   ```bash
+   pip install -r modulo_1/requirements.txt
+Crea un archivo .env en la raíz (basado en .env.example) y agrega tu llave:
 
-- `src/` : todo el código fuente de tu proyecto va aquí.
-- `docs/` : documentación técnica del proyecto (diagramas, decisiones de arquitectura, notas).
-- `tests/` : pruebas de tu código (las vas a usar más adelante en el programa, cuando el proyecto lo requiera).
-- `requirements.txt` : dependencias de Python de tu proyecto, para que cualquier otra persona pueda reconstruir tu entorno con un solo comando.
-- `.env.example` : plantilla de las variables de entorno que tu proyecto necesita, sin valores reales. Tu archivo `.env` real (con tus credenciales) nunca se commitea.
-- `.gitignore` : le dice a Git qué archivos y carpetas ignorar (entre ellos, tu entorno virtual y tu archivo `.env`).
+env
+GEMINI_API_KEY=tu_api_key_aqui
+Para probar la conexión básica y ver el benchmark de modelos:
 
-## Reglas que se mantienen durante todo el programa
+bash
+cd modulo_1
+python src/cliente_gemini.py
+Para ejecutar el test de consistencia de los prompts (genera el archivo registro_resultados.json):
 
-- Ningún secreto (contraseña, llave de API, token) va escrito directamente en el código ni en ningún archivo que se suba al repositorio.
-- Cada proyecto nuevo tiene su propio entorno virtual: no se comparten dependencias entre proyectos distintos.
-- Todo el trabajo que se entrega en este programa vive en un repositorio de GitHub, sin excepción.
+bash
+python src/test_consistencia.py
+Decisiones de arquitectura y estado actual
+Modelo elegido: gemini-3.6-flash por su equilibrio entre capacidad y latencia (ver docs/decision-arquitectura.md).
+
+Manejo de errores: El cliente y el test están preparados para distinguir entre fallos de la API (límite de cuota 429, error interno 503) y fallos en la estructura de los prompts.
+
+Consistencia: Las 3 pruebas del banco (capital_pais, es_par, colores_primarios) han demostrado un 100% de consistencia en formato y contenido en la última ejecución.
+
+text
+
+### Último paso para guardar esto en Git
+Como modificaste el `README.md`, debes agregarlo al commit. Si ya hiciste el commit de los otros archivos, solo escribe:
+
+```powershell
+git add README.md
+git commit -m "docs: actualiza README con la estructura y estado actual del proyecto"
+Si aún no has hecho el commit de los archivos de código, puedes agregar todo junto:
+
+powershell
+git add README.md src/banco.py src/test_consistencia.py src/registro_resultados.json src/cliente_gemini.py src/decision-arquitectura.md
+git commit -m "feat: completa banco de prompts, test de consistencia y actualiza README"
+¡Con esto tu repositorio no solo tendrá el código funcionando, sino que lucirá profesional y listo para que cualquier persona (o tu profesor) lo entienda a la primera! 🎓✨
+
